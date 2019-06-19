@@ -23,7 +23,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-ur"""
+r"""
 
     redisbayes
     ~~~~~~~~~~
@@ -43,9 +43,9 @@ ur"""
         True
         >>> rb.train('good', 'sunshine God love sex lobster sloth')
         >>> rb.train('bad', 'fear death horror government zombie')
-        >>> rb.classify('sloths are so cute i love them')
+        >>> str(rb.classify('sloths are so cute i love them'))
         'good'
-        >>> rb.classify('i am a zombie and love the government')
+        >>> str(rb.classify('i am a zombie and love the government'))
         'bad'
         >>> int(rb.score('i am a zombie and love the government')['bad'])
         -7
@@ -58,19 +58,19 @@ ur"""
 
     Words are lowercased and unicode is supported::
 
-        >>> print english_tokenizer("Æther")[0]
-        æther
+        >>> b'\xc3\xa6ther' in bytes(redisbayes.english_tokenizer("Æther")[0].encode("utf-8"))
+        True
 
     Common english words and 1-2 character words are ignored::
 
-        >>> english_tokenizer("greetings mary a b aa bb")
-        [u'mary']
+        >>> str(english_tokenizer("greetings mary a b aa bb")[0])
+        'mary'
 
     Some characters are removed::
 
-        >>> print english_tokenizer("contraction's")[0]
+        >>> print(english_tokenizer("contraction's")[0])
         contraction's
-        >>> print english_tokenizer("what|is|goth")[0]
+        >>> print(english_tokenizer("what|is|goth")[0])
         goth
 
 """
@@ -78,8 +78,7 @@ ur"""
 import re
 import math
 
-
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 english_ignore = set("""
 a able about above abroad according accordingly across actually adj after
@@ -143,16 +142,21 @@ successful greatest began including being all for close but
 
 
 def tidy(text):
-    if not isinstance(text, basestring):
-        text = str(text)
-    if not isinstance(text, unicode):
-        text = text.decode('utf8')
+    try:
+        if not isinstance(text, basestring):
+            text = str(text)
+        if not isinstance(text, unicode):
+            text = text.decode('utf8')
+    except Exception:
+        if not isinstance(text, str):
+            text = text.decode('utf8')
     text = text.lower()
     return re.sub(r'[\_.,<>:;~+|\[\]?`"!@#$%^&*()\s]', ' ', text, re.UNICODE)
 
 
 def english_tokenizer(text):
     words = tidy(text).split()
+    #import pdb;pdb.set_trace()
     return [w for w in words if len(w) > 2 and w not in english_ignore]
 
 
@@ -179,16 +183,20 @@ class RedisBayes(object):
 
     def flush(self):
         for cat in self.redis.smembers(self.prefix + 'categories'):
+            if isinstance(cat, bytes):
+                cat = cat.decode("utf-8")
             self.redis.delete(self.prefix + cat)
         self.redis.delete(self.prefix + 'categories')
 
     def train(self, category, text):
         self.redis.sadd(self.prefix + 'categories', category)
-        for word, count in occurances(self.tokenizer(text)).iteritems():
+        for word, count in occurances(self.tokenizer(text)).items():
             self.redis.hincrby(self.prefix + category, word, count)
 
     def untrain(self, category, text):
-        for word, count in occurances(self.tokenizer(text)).iteritems():
+        for word, count in occurances(self.tokenizer(text)).items():
+            if isinstance(category, bytes):
+                category = category.decode("utf-8")
             cur = self.redis.hget(self.prefix + category, word)
             if cur:
                 new = int(cur) - count
@@ -204,24 +212,32 @@ class RedisBayes(object):
         score = self.score(text)
         if not score:
             return None
-        return sorted(score.iteritems(), key=lambda v: v[1])[-1][0]
+        return sorted(iter(score.items()), key=lambda v: v[1])[-1][0]
 
     def score(self, text):
         occurs = occurances(self.tokenizer(text))
         scores = {}
         for category in self.redis.smembers(self.prefix + 'categories'):
+            if isinstance(category, bytes):
+                category = category.decode("utf-8")
             tally = self.tally(category)
             if tally == 0:
                 continue
             scores[category] = 0.0
-            for word, count in occurs.iteritems():
+            for word, count in occurs.items():
+                if isinstance(category, bytes):
+                    category = category.decode("utf-8")
                 score = self.redis.hget(self.prefix + category, word)
+                if isinstance(score, bytes):
+                    score = int(score.decode("utf-8"))
                 assert not score or score > 0, "corrupt bayesian database"
                 score = score or self.correction
                 scores[category] += math.log(float(score) / tally)
         return scores
 
     def tally(self, category):
+        if isinstance(category, bytes):
+            category = category.decode("utf-8")
         tally = sum(int(x) for x in self.redis.hvals(self.prefix + category))
         assert tally >= 0, "corrupt bayesian database"
         return tally

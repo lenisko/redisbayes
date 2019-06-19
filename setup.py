@@ -17,7 +17,7 @@ def read(fname):
 setup(
     name                 = "redisbayes",
     version              = __import__("redisbayes").__version__,
-    description          = u"Naïve Bayesian Text Classifier on Redis",
+    description          = "Naïve Bayesian Text Classifier on Redis",
     long_description     = read("README.md"),
     author               = "Justine Tunney",
     author_email         = "jtunney@gmail.com",
