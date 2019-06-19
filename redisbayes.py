@@ -147,7 +147,7 @@ def tidy(text):
             text = str(text)
         if not isinstance(text, unicode):
             text = text.decode('utf8')
-    except Exception:
+    except NameError:
         if not isinstance(text, str):
             text = text.decode('utf8')
     text = text.lower()
