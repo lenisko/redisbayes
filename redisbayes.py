@@ -156,7 +156,6 @@ def tidy(text):
 
 def english_tokenizer(text):
     words = tidy(text).split()
-    #import pdb;pdb.set_trace()
     return [w for w in words if len(w) > 2 and w not in english_ignore]
 
 
